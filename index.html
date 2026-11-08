@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Map data viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#ffffff; --panel:#f3f3f2; --ink:#222222; --muted:#5e5e5e; --line:#d4d4d2; --accent:#C8102E; --accent-dk:#9e0c24;
+  --band:#d6d6d3; --band-ink:#222222; --band-line:rgba(0,0,0,.45); --band-hover:rgba(0,0,0,.07);
+  --sans:"Barlow","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --cond:"Barlow Condensed","Arial Narrow","Segoe UI",Roboto,Arial,sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#1b1b1d; --panel:#242426; --ink:#ececea; --muted:#a6a6a3; --line:#3b3b3e; --accent:#ec4a60; --accent-dk:#ff8090; --band:#3a3a3d; --band-ink:#ececea; --band-line:rgba(255,255,255,.55); --band-hover:rgba(255,255,255,.08); color-scheme: dark; }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14.5px/1.45 var(--sans);display:flex;flex-direction:column}
+.app{flex:1;display:flex;min-height:0}
+/* Top app bar */
+.appbar{display:flex;align-items:stretch;gap:28px;height:56px;padding:0 18px;background:var(--bg);border-top:4px solid var(--accent);border-bottom:1px solid var(--line);box-shadow:0 1px 4px rgba(0,0,0,.08);position:relative;z-index:6;flex:none}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--cond);font-weight:700;font-size:23px;color:var(--ink);white-space:nowrap;letter-spacing:.01em}
+.brand .logo{width:30px;height:30px;border-radius:7px;background:var(--accent);display:grid;place-items:center;flex:none}
+.brand .logo svg{width:19px;height:19px}
+.brand b{color:var(--accent);font-weight:700}
+.tabs{align-self:center;margin-left:auto;display:grid;grid-template-columns:repeat(4,auto);border:2px solid var(--accent);border-radius:7px;overflow:hidden;background:var(--panel)}
+.tabs button{margin:0;border:0;border-radius:0;background:var(--panel);color:var(--ink);font-family:var(--cond);font-size:17px;font-weight:600;padding:6px 16px;display:flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+.tabs button+button{border-left:2px solid var(--accent)}
+.tabs button svg{width:18px;height:18px}
+.tabs button:hover{background:var(--line)}
+.tabs button[aria-selected="true"]{background:var(--accent);color:#fff}
+.aboutBtn{align-self:center;margin:0 0 0 -10px;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:500;padding:5px 13px;border:1.5px solid var(--line);border-radius:999px;background:transparent;color:var(--ink)}
+.aboutBtn:hover{border-color:var(--accent);color:var(--accent)}
+.aboutBtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.aboutBtn svg{width:16px;height:16px}
+@media (max-width:640px){ .appbar{gap:10px;padding:0 10px} .brand .bname,.aboutBtn .btxt{display:none} .aboutBtn{padding:6px} .tabs button{font-size:15px;padding:7px 10px} .tabs .tt{display:none} .aboutBtn{margin-left:-4px} }
+[hidden]{display:none !important}
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+#titleIn{width:100%;font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)}
+button.danger{color:var(--accent);border-color:var(--accent);font-weight:600}
+button.danger:hover{background:var(--accent);color:#fff}
+/* About page */
+#aboutView{overflow-y:auto;background:var(--bg)}
+.about{max-width:760px;margin:0 auto;padding:28px 28px 48px;line-height:1.6}
+.about h2{font-family:var(--cond);font-size:34px;font-weight:700;margin:0 0 2px;color:var(--accent)}
+.about h3{font-family:var(--cond);font-size:21px;font-weight:600;margin:28px 0 6px;padding-bottom:3px;border-bottom:2px solid var(--accent)}
+.about a{color:var(--accent-dk)}
+.about .note{border-left:4px solid var(--accent);background:var(--panel);padding:10px 14px;margin:10px 0}
+.about p,.about li{max-width:68ch}
+.about .ver{color:var(--muted);margin:0 0 16px}
+.about table{border-collapse:collapse;font-size:13px;margin:8px 0}
+.about th,.about td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
+.about th{background:var(--panel)}
+.about code{background:var(--panel);padding:1px 4px;border-radius:3px;font-size:12.5px}
+.tblwrap{overflow-x:auto}
+.view{flex:1;position:relative;min-height:60vh}
+.view[hidden]{display:none}
+#map{position:absolute;inset:0}
+/* Well-name labels (HTML markers) */
+.well-lbl{font:600 11.5px/1 var(--sans);color:#1e1e1e;white-space:nowrap;pointer-events:none;
+  text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 4px #fff}
+.readout{position:absolute;left:10px;bottom:34px;background:rgba(255,255,255,.94);color:#222;font-size:12px;padding:4px 8px;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.25);z-index:2;pointer-events:none}
+/* Scatter-plot grid */
+#plotView{flex-direction:column;overflow:auto;background:var(--bg)}
+#plotView:not([hidden]){display:flex}
+.plotbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:10px 14px 0}
+.plot-title{font-family:var(--cond);font-weight:600;font-size:21px}
+.plot-title:empty{display:none}
+.plot-legend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;font-size:12.5px}
+.plot-legend .lt{font-family:var(--cond);font-weight:600;font-size:14.5px}
+.plot-legend .hbar{display:flex;align-items:center;gap:6px}
+.plot-legend .hramp{width:160px;height:12px;border:1px solid rgba(0,0,0,.25);border-radius:2px}
+.pgrid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(360px,1fr);gap:10px;padding:10px 14px 14px;min-height:740px}
+.pcard{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-width:0;min-height:0;overflow:hidden}
+.pplot{flex:1;min-height:220px}
+.pctl{display:flex;flex-direction:column;gap:5px;padding:7px 9px;border-top:1px solid var(--line);background:var(--panel);font-size:12.5px}
+.prow{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px}
+.prow .tl{font-family:var(--cond);font-weight:600;font-size:13.5px;color:var(--accent)}
+.pctl label{display:flex;align-items:center;gap:4px;margin:0;color:var(--ink);font-size:12.5px}
+.pctl select{width:auto;max-width:150px;padding:3px 4px;font-size:12.5px}
+.backBtn{margin:0 0 18px;font-weight:600;color:var(--accent);border-color:var(--accent)}
+.backBtn:hover{background:var(--accent);color:#fff}
+@media (max-width:1100px){ .pgrid{grid-template-columns:1fr} }
+.map-title{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.92);color:#222;padding:4px 14px;border-radius:4px;border-bottom:3px solid #C8102E;font-family:var(--cond);font-weight:600;font-size:19px;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:60%;text-align:center;z-index:2}
+.map-title:empty{display:none}
+aside{width:330px;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:16px 16px 24px}
+h1{margin:0}
+fieldset{border:1px solid var(--line);border-radius:6px;padding:10px 12px 12px;margin:0 0 12px}
+legend{font-family:var(--cond);font-weight:600;font-size:16px;padding:0 4px;letter-spacing:.01em}
+.subhead{font-family:var(--cond);font-weight:600;font-size:14.5px;color:var(--ink);margin:12px 0 0;padding-top:8px;border-top:1px solid var(--line)}
+label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 3px}
+label.inline{display:flex;align-items:center;gap:6px;color:var(--ink)}
+select,input[type=file]{width:100%;font:inherit;font-size:13px;padding:5px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);cursor:pointer;margin:8px 6px 0 0}
+button.small{font-size:12.5px;padding:4px 9px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.status{font-size:12px;color:var(--muted);margin-top:8px}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+.radios{display:flex;gap:14px}
+.checks{max-height:170px;overflow-y:auto;margin-top:6px;border:1px solid var(--line);border-radius:4px;padding:4px 8px;background:var(--bg)}
+.checks label{margin:3px 0}
+/* On-map controls and legend (always on a light card, since basemaps are light) */
+.base-ctl,.map-legend,.maplibregl-popup,.readout{color-scheme:light}
+.base-ctl{font-family:var(--sans);background:#fff;color:#222;padding:6px 10px;border-radius:4px;box-shadow:0 0 0 2px rgba(0,0,0,.1);font-size:12.5px}
+.base-ctl label{display:flex;align-items:center;gap:6px;color:#1d2329;margin:2px 0;font-size:12.5px}
+.map-legend{font-family:var(--sans);position:absolute;right:10px;bottom:34px;background:rgba(255,255,255,.94);color:#1d2329;border-radius:5px;box-shadow:0 1px 5px rgba(0,0,0,.25);padding:8px 10px;font-size:12px;max-height:calc(100% - 60px);overflow-y:auto;max-width:260px;z-index:2}
+.map-legend[hidden]{display:none}
+.map-legend h3{font-family:var(--cond);font-size:14.5px;margin:0 0 4px;font-weight:600}
+.map-legend .sec+.sec{margin-top:10px;padding-top:8px;border-top:1px solid #ddd}
+.leg-item{display:flex;align-items:center;gap:7px;margin:2px 0}
+.sw{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.3)}
+.cbar{display:flex;gap:6px;align-items:stretch}
+.cbar .ramp{width:14px;height:140px;border:1px solid rgba(0,0,0,.3);border-radius:2px}
+.cbar .ticks{position:relative;height:140px;min-width:70px}
+.cbar .ticks span{position:absolute;left:0;transform:translateY(-50%);white-space:nowrap}
+.map-legend svg text{fill:#1d2329;font-size:11.5px}
+.popup td{padding:1px 8px 1px 0;vertical-align:top;color:#1d2329}
+.popup td:first-child{color:#666;white-space:nowrap}
+/* Toggle switch */
+.switch{display:flex;align-items:center;gap:9px;margin:2px 0 6px;color:var(--ink);font-size:13.5px;font-weight:600;cursor:pointer}
+.switch input{appearance:none;-webkit-appearance:none;margin:0;width:38px;height:21px;border-radius:999px;background:#b9b9b6;position:relative;cursor:pointer;flex:none;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:2.5px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{left:19px}
+/* Data entry table */
+#dataView{overflow:auto;background:var(--bg)}
+.dt{padding:16px 18px 30px;max-width:100%}
+.dt h2{font-family:var(--cond);font-size:26px;font-weight:700;margin:0 0 4px}
+.dtbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0}
+.dtbar button{margin:0}
+.dtbar .sp{flex:1}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{background:var(--accent-dk);border-color:var(--accent-dk)}
+.dtwrap{overflow:auto;max-height:calc(100vh - 260px);border:1px solid var(--line);border-radius:6px}
+.dtable{border-collapse:separate;border-spacing:0;font-size:13px}
+.dtable th,.dtable td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;background:var(--bg)}
+.dtable thead th{position:sticky;top:0;z-index:2;background:var(--panel)}
+.dtable .rn{position:sticky;left:0;z-index:1;background:var(--panel);color:var(--muted);font-size:12px;text-align:right;padding:0 4px 0 2px;white-space:nowrap;min-width:46px}
+.dtable thead .rn{z-index:3}
+.dtable input{border:0;border-radius:0;background:transparent;color:var(--ink);font:inherit;font-size:13px;padding:5px 7px;width:138px;display:block}
+.dtable thead input{font-weight:600;font-family:var(--sans)}
+.dtable input:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--bg)}
+.hcell{display:flex;align-items:center}
+.xbtn{margin:0;padding:0 5px;border:0;background:transparent;color:var(--muted);font-size:14px;line-height:1;cursor:pointer}
+.xbtn:hover{color:var(--accent)}
+/* Popup sits above labels */
+.maplibregl-popup{z-index:3}
+.maplibregl-popup-content{max-height:300px;overflow-y:auto;font-size:12.5px;padding:18px 12px 10px}
+.maplibregl-popup-close-button{font-size:18px;padding:0 6px;color:#444}
+@media (max-width:820px){ .app{flex-direction:column} aside{width:auto;border-left:0;border-top:1px solid var(--line)} .view{min-height:58vh} .cbar .ramp,.cbar .ticks{height:100px} }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true" title="Map Data Viewer"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span>
+    <span class="bname"><b>Map</b> Data Viewer</span>
+  </div>
+  <button class="aboutBtn" id="aboutBtn" type="button" aria-pressed="false" aria-label="About"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span class="btxt">About</span></button>
+  <nav class="tabs" role="tablist" aria-label="View">
+    <button role="tab" id="tabMap" aria-selected="true" type="button" title="Map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg><span class="tt">Map</span></button>
+    <button role="tab" id="tabSurf" aria-selected="false" type="button" title="Interpolated surface"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 18 10 5 10-5" opacity=".5"/></svg><span class="tt">Surface</span></button>
+    <button role="tab" id="tabPlot" aria-selected="false" type="button" title="Scatter plots"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3v17h17"/><circle cx="9" cy="14" r="1.6" fill="currentColor"/><circle cx="13" cy="9" r="1.6" fill="currentColor"/><circle cx="17" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="6" r="1.6" fill="currentColor"/></svg><span class="tt">Scatter plots</span></button>
+    <button role="tab" id="tabData" aria-selected="false" type="button" title="Data entry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16"/></svg><span class="tt">Data</span></button>
+  </nav>
+</header>
+<div class="app">
+<main>
+  <div class="view" id="mapView">
+    <div id="map" role="region" aria-label="Map"></div>
+    <div class="readout" id="readout" hidden></div>
+    <div class="map-title" id="mapTitle"></div>
+    <div class="map-legend" id="legend" hidden></div>
+  </div>
+  <div class="view" id="plotView" hidden>
+    <div class="plotbar"><div class="plot-title" id="plotTitle"></div><div class="plot-legend" id="plotLegend"></div></div>
+    <div class="pgrid" id="pgrid"></div>
+  </div>
+  <div class="view" id="dataView" hidden>
+    <div class="dt">
+      <h2>Enter or paste data</h2>
+      <p class="hint" style="font-size:13px;margin:0">Type in the cells, or copy a block of cells in Excel and paste it (⌘V / Ctrl+V) into any cell. Pasting into the header row also sets the column names. Click a column name to rename it. Press Enter to move down; Enter on the last row adds a row. Then click <b>Plot this data</b>.</p>
+      <div class="dtbar">
+        <button class="small" id="dtAddRow" type="button">+ Add row</button>
+        <button class="small" id="dtAddCol" type="button">+ Add column</button>
+        <button class="small" id="dtLoad" type="button">Edit current data</button>
+        <button class="small danger" id="dtClear" type="button">Clear table</button>
+        <span class="sp"></span>
+        <button class="small" id="dtDown" type="button">Download CSV</button>
+        <button class="small primary" id="dtApply" type="button">Plot this data</button>
+      </div>
+      <div class="dtwrap"><table class="dtable" id="dtable"></table></div>
+      <div class="status" id="dtMsg"></div>
+    </div>
+  </div>
+  <div class="view" id="aboutView" hidden>
+    <article class="about">
+      <button class="backBtn" id="backBtn" type="button">&larr; Back to map</button>
+      <h2>Map Data Viewer</h2>
+      <p class="ver">Version 2.5, November 2026</p>
+      <p>Map Data Viewer plots point data, such as wells, on an interactive map and as a scatter plot. Bubble size and color can each show a column from your data, so one view can carry two variables. It runs entirely in your web browser.</p>
+
+      <h3>How to use it</h3>
+      <ol>
+        <li>Click <b>Download template</b> for an example file, enter data in the <b>Data</b> tab, or prepare your own (see <a href="#prep">Preparing your own data</a> below). The app opens with the template data already loaded; click <b>Clear</b> to remove it.</li>
+        <li>Choose a CSV or Excel file under <b>Data</b>. The viewer detects number, date and text columns and guesses which columns hold latitude and longitude.</li>
+        <li>Optionally pick a text column under <b>Filter</b> and tick the values to show.</li>
+        <li>Choose what sets color and size. Text columns become categories; number and date columns get a colorbar or low/medium/high bins.</li>
+        <li>Switch views with the buttons at the top right: <b>Map</b>, <b>Surface</b>, <b>Scatter plots</b> and <b>Data</b>. The map and plots have their own color and size settings; the filter applies to all views.</li>
+        <li>Click a bubble on the map to see all values for that row. Each well is labeled on the map (by well name by default); turn labels off with <b>Show well labels</b> or pick another label column under <b>Map type</b>.</li>
+        <li>Open <b>Surface</b> to shade the map with estimated values between wells. Pick the parameter and adjust smoothness, detail and opacity; hover over the map to read estimated values. Use the <b>Show wells</b> switch to hide or show the wells on the map or surface.</li>
+        <li>Open <b>Data</b> to type data into a table or paste cells copied from Excel. Add rows and columns as needed, then click <b>Plot this data</b>. <b>Edit current data</b> brings the loaded data into the table so you can correct it. The table is not saved when the page closes, so use <b>Download CSV</b> to keep your entries.</li>
+        <li>The scatter-plot view shows four plots. Under each plot choose X and Y, log axes, whether to connect points, and a trendline. The camera icon on a plot saves it as a PNG.</li>
+        <li>Click <b>Clear</b> to remove the loaded data.</li>
+      </ol>
+
+      <h3 id="prep">Preparing your own data</h3>
+      <p>You don’t need the template. Any spreadsheet works if it follows these rules:</p>
+      <ol>
+        <li><b>One header row, then one row per well.</b> Put column names in the first row and nothing above them (no titles, notes or merged cells). Leave no blank rows between wells.</li>
+        <li><b>Two coordinate columns are required:</b> latitude and longitude in decimal degrees (WGS84 or NAD83), for example <code>40.37</code> and <code>-81.49</code>. West longitudes and south latitudes are negative. Columns named like “Latitude”/“Lat” and “Longitude”/“Long”/“Lon” are detected automatically; otherwise pick them under <b>Map type</b>. Degrees-minutes-seconds and UTM coordinates are not supported, so convert them first.</li>
+        <li><b>Everything else is optional</b> and can have any name: a well name or ID for labels, a status or category column for colors and filtering, and any number or date columns for bubble size, plots and the interpolated surface.</li>
+        <li><b>Numbers:</b> plain numbers only. Put units in the column name (“Total Depth, ft”), not in the cells (not “17,513 ft”). Avoid thousands separators.</li>
+        <li><b>Dates:</b> month/day/year (<code>4/1/1992</code>) or year-month-day (<code>1992-04-01</code>). Use four-digit years where you can. Day/month/year is not supported and would be misread.</li>
+        <li><b>Unknown values:</b> leave the cell blank. Don’t use 0, -999, “N/A” or placeholder dates such as 1/1/1900; they are plotted as real values.</li>
+        <li><b>Categories:</b> spell them the same way every time (“P&amp;A” and “P & A” count as two categories).</li>
+        <li><b>API numbers:</b> keep the dashes, or format the column as Text in Excel so leading zeros aren’t dropped.</li>
+        <li><b>Save</b> as CSV (Excel’s “CSV UTF-8” option is best) or as .xlsx. In Excel files, the first worksheet with data is used, and you can switch sheets in the app.</li>
+      </ol>
+
+      <h3>How columns are detected</h3>
+      <div class="tblwrap"><table>
+        <tr><th>Column type</th><th>Detected when</th><th>Used for</th></tr>
+        <tr><td>Number</td><td>At least 90% of filled cells are numbers (commas like 1,234 are fine)</td><td>Size, color, plot axes</td></tr>
+        <tr><td>Date</td><td>At least 90% of filled cells are dates: month/day/year, or year-month-day</td><td>Color, plot axes</td></tr>
+        <tr><td>Text</td><td>Anything else, including API numbers with dashes</td><td>Color categories, filter</td></tr>
+      </table></div>
+      <p>Blank cells show as <code>&lt;undefined&gt;</code> in gray. Two-digit years follow Excel’s rule: 00–29 become 2000–2029 and 30–99 become 1930–1999.</p>
+
+      <h3>Good to know</h3>
+      <ul>
+        <li><b>Your data stays on your computer.</b> Files are read in the browser and are not uploaded anywhere. The map does request basemap tiles from the tile providers, which sends them the map area you are viewing.</li>
+        <li>An internet connection is needed for the map tiles and the program libraries.</li>
+        <li>Zero or blank values are drawn at the smallest bubble size and are left out of log-scale plot axes.</li>
+        <li>Numeric color bins are quantiles: each bin holds roughly the same number of points.</li>
+        <li><b>Interpolated surface:</b> values between wells are estimated by inverse-distance weighting, a weighted average of all wells where nearer wells count more. It reproduces well values exactly, cannot predict highs or lows beyond the measured range, and tends to form “bull’s-eyes” around isolated wells. It ignores geology, faults and trends, and it is not kriging. Treat it as a visual guide, not a resource or reservoir estimate. With the area limit on, it is drawn only inside the outline that encloses the wells.</li>
+        <li><b>Connect points</b> joins points in order of X, separately for each color group. It is meaningful for ordered data (for example, values against depth or date), not for unrelated wells.</li>
+        <li><b>Trendlines</b> are least-squares fits, as in Excel: linear, exponential, logarithmic, power, polynomial (order 2–6) and moving average. Each can be fitted to all points or to each color group. Exponential and power fits are made on ln(y), so their R² is measured on ln(y) and is not directly comparable with the others. Logarithmic and power fits skip points with X ≤ 0; exponential and power fits skip points with Y ≤ 0. For date axes, X is measured in years from the earliest date. A polynomial with almost as many terms as points will pass through every point; that is not evidence of a real trend.</li>
+      </ul>
+
+      <h3>Credits and licenses</h3>
+      <ul>
+        <li>Map rendering: <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL JS</a> (BSD-3-Clause)</li>
+        <li>Charts: <a href="https://plotly.com/javascript/" target="_blank" rel="noopener">Plotly.js</a> (MIT)</li>
+        <li>CSV reading: <a href="https://www.papaparse.com" target="_blank" rel="noopener">Papa Parse</a> (MIT)</li>
+        <li>Excel reading: <a href="https://sheetjs.com" target="_blank" rel="noopener">SheetJS Community Edition</a> (Apache 2.0)</li>
+        <li>Typeface: <a href="https://fonts.google.com/specimen/Barlow" target="_blank" rel="noopener">Barlow and Barlow Condensed</a> (SIL Open Font License)</li>
+        <li>Basemaps: Esri (light gray, satellite, topographic) and <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> with data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Esri basemaps are intended for light, non-commercial use with attribution; check the provider terms before public or commercial use.</li>
+      </ul>
+
+      <h3>Design and development</h3>
+      <p><b>Design:</b> Dr. Vahid Atashbari, Youngstown State University<br>
+      <b>Code:</b> written by Claude, an AI model from Anthropic, to the designer’s specifications and revised through his testing and feedback.</p>
+
+      <h3>Disclaimer</h3>
+      <div class="note">
+        <p>Map Data Viewer is an independent project of its designer. It is not an official product of Youngstown State University and is not affiliated with, sponsored by, or endorsed by the university. The designer’s university affiliation is listed for identification only. The color scheme is a design choice and does not imply any university approval.</p>
+      </div>
+      <p>The software is provided “as is,” without warranty of any kind. You are responsible for checking results against your source data before using them in reports, publications or decisions.</p>
+    </article>
+  </div>
+</main>
+
+<aside>
+  <fieldset>
+    <legend>Figure title</legend>
+    <input id="titleIn" placeholder="Optional, shown on map and plot" aria-label="Figure title">
+  </fieldset>
+
+  <fieldset>
+    <legend>Data</legend>
+    <input type="file" id="file" accept=".csv,.xlsx,.xls,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" aria-label="Choose a CSV or Excel file">
+    <p class="hint">CSV or Excel (.xlsx, .xls)</p>
+    <div id="sheetBox" hidden><label for="sheetSel">Worksheet</label><select id="sheetSel"></select></div>
+    <button class="small danger" id="clearBtn" type="button">Clear</button>
+    <button class="small" id="tplBtn" type="button">Download template</button>
+    <div class="status" id="status"></div>
+  </fieldset>
+
+  <fieldset id="filtFs">
+    <legend>Filter (what to display)</legend>
+    <label for="filtSel">Show only rows where</label>
+    <select id="filtSel"></select>
+    <div id="filtBox" hidden>
+      <button class="small" id="filtAll" type="button">All</button><button class="small" id="filtNone" type="button">None</button>
+      <div class="checks" id="filtVals"></div>
+    </div>
+  </fieldset>
+
+  <div id="surfOpts" hidden>
+  <fieldset>
+    <legend>Interpolated surface</legend>
+    <label for="surfSel">Parameter</label><select id="surfSel"></select>
+    <label for="surfPow">Smoothness: <span id="surfPowv">2.0</span> <span style="font-size:11.5px">(lower = smoother)</span></label>
+    <input type="range" id="surfPow" min="1" max="5" step="0.5" value="2">
+    <label for="surfRes">Detail</label>
+    <select id="surfRes"><option value="120">Coarse (fast)</option><option value="220" selected>Medium</option><option value="360">Fine</option></select>
+    <label class="inline"><input type="checkbox" id="surfClip" checked> Only inside the area covered by wells</label>
+    <label for="surfOp">Surface opacity: <span id="surfOpv">0.60</span></label>
+    <input type="range" id="surfOp" min="0" max="1" step="0.05" value="0.6">
+    <p class="hint">Estimated between wells by inverse-distance weighting. It is a smooth guess, not a geological model: with few or clustered wells it can be misleading.</p>
+    <div class="status" id="surfMsg"></div>
+  </fieldset>
+  </div>
+
+  <div id="dataOpts" hidden>
+  <fieldset>
+    <legend>Data entry tips</legend>
+    <p class="hint" style="margin-top:0">Latitude and longitude must be decimal degrees (west longitudes negative). Leave unknown cells blank. Dates as month/day/year.</p>
+    <p class="hint">The table is not saved when you close the page. Use <b>Download CSV</b> to keep your entries.</p>
+    <p class="hint">See <b>About → Preparing your own data</b> for full rules.</p>
+  </fieldset>
+  </div>
+
+  <div id="mapOpts">
+  <fieldset>
+    <legend>Wells</legend>
+    <label class="switch"><input type="checkbox" id="showWells" role="switch" checked> Show wells</label>
+    <label for="latSel">Latitude column</label><select id="latSel"></select>
+    <label for="lonSel">Longitude column</label><select id="lonSel"></select>
+    <div id="wellCfg">
+    <label style="margin-top:12px">Well symbols</label>
+    <div class="radios" role="radiogroup" aria-label="Map type">
+      <label class="inline"><input type="radio" name="mode" value="bubble" checked> Geo-bubble</label>
+      <label class="inline"><input type="radio" name="mode" value="scatter"> Geo-scatter</label>
+    </div>
+    <p class="hint" id="modeHint"></p>
+    <label class="inline" style="margin-top:12px"><input type="checkbox" id="showLbl" checked> Show well labels</label>
+    <div id="lblBox"><label for="lblSel">Label column</label><select id="lblSel"></select></div>
+    </div>
+  </fieldset>
+
+  <fieldset id="wellStyle">
+    <legend>Well color &amp; size</legend>
+    <label for="colorSel">Color by</label><select id="colorSel"></select>
+    <label for="cmodeSel">Numeric/date color</label>
+    <select id="cmodeSel">
+      <option value="cont">Continuous (colorbar)</option>
+      <option value="3">3 bins: low / medium / high</option>
+      <option value="5">5 bins (quantiles)</option>
+    </select>
+    <div id="bubbleSz">
+      <label for="sizeSel">Bubble size by</label><select id="sizeSel"></select>
+      <label for="scaleSel">Size scaling</label>
+      <select id="scaleSel">
+        <option value="area">Area proportional to value</option>
+        <option value="log">Log scale (for very wide ranges)</option>
+      </select>
+      <label for="maxR">Largest bubble: <span id="maxRv">28</span> px</label><input type="range" id="maxR" min="8" max="60" value="28">
+    </div>
+    <div id="scatSz" hidden><label for="mkR">Marker size: <span id="mkRv">5</span> px</label><input type="range" id="mkR" min="2" max="14" value="5"></div>
+    <label for="op">Opacity: <span id="opv">0.70</span></label>
+    <input type="range" id="op" min="0.2" max="1" step="0.05" value="0.7">
+    <label class="inline"><input type="checkbox" id="showLeg" checked> Show legend on map</label>
+    <button class="small" id="fitBtn" type="button">Zoom to data</button>
+  </fieldset>
+
+  </div>
+
+  <div id="plotOpts" hidden>  </fieldset>
+  </div>
+
+  <div id="plotOpts" hidden>
+  <fieldset>
+    <legend>Plot color &amp; size</legend>
+    <label for="pColorSel">Color by</label><select id="pColorSel"></select>
+    <label for="pCmodeSel">Numeric/date color</label>
+    <select id="pCmodeSel">
+      <option value="cont">Continuous (colorbar)</option>
+      <option value="3">3 bins: low / medium / high</option>
+      <option value="5">5 bins (quantiles)</option>
+    </select>
+    <label for="pSizeSel">Point size by</label><select id="pSizeSel"></select>
+    <div id="pSizeOpts" hidden>
+      <label for="pScaleSel">Size scaling</label>
+      <select id="pScaleSel">
+        <option value="area">Area proportional to value</option>
+        <option value="log">Log scale (for very wide ranges)</option>
+      </select>
+      <label for="pMaxR">Largest point: <span id="pMaxRv">20</span> px</label><input type="range" id="pMaxR" min="6" max="40" value="20">
+    </div>
+    <label for="pOp">Opacity: <span id="pOpv">0.80</span></label>
+    <input type="range" id="pOp" min="0.2" max="1" step="0.05" value="0.8">
+    <p class="hint">These settings apply to all four plots. Choose each plot’s X and Y under the plot. The filter applies to both views. The camera icon on a plot saves it as a PNG.</p>
+  </fieldset>
+  </div>
+</aside>
+</div>
+
+<script>
+const PALETTE=['#0072BD','#D95319','#EDB120','#7E2F8E','#77AC30','#4DBEEE','#A2142F','#2E8B57','#C71585','#8B6914'];
+const VIRIDIS=['#440154','#3b528b','#21918c','#5ec962','#fde725'];
+const UNDEF='#7f7f7f', OTHER='#c4c4c4', NONE='(none)', UNDEF_L='<undefined>', MAXCAT=10;
+const $=id=>document.getElementById(id);
+
+const TEMPLATE=`API,Well Name,Latitude,Longitude,"Total Depth, ft","Ground Elevation, ft",Date 1st Production,Date Ceased,Well Status,"Cum. Oil, BBL","Cum. Gas, MCF","Cum. Water, BBL",custom1,custom 2,custom3
+01-011-11111,well1,39.57,-79.21,17513,348,1/1/81,10/1/04,Active,305293,15460336,755874,6088,4,yes
+01-011-11112,well2,40.37,-81.49,11460,592,4/1/92,8/1/03,P&A,425788,6749501,187618,4160,4,no
+01-011-11113,well3,41.09,-81.41,15369,1118,3/2/82,11/1/01,D&A,339079,15233230,710677,6791,2,no
+01-011-11114,well4,41.47,-82.13,19920,851,12/1/90,4/1/04,Inactive,670384,1358941,386719,6029,8,yes
+01-011-11115,well5,40.60,-80.91,14100,653,5/1/89,3/1/02,,473978,10933094,394651,3143,7,yes
+01-011-11116,well6,40.23,-80.63,11067,224,6/1/94,2/1/00,P&A,909373,5809405,73857,7036,3,yes
+01-011-11117,well7,39.88,-81.84,19033,459,1/1/81,10/1/04,Active,696475,4079323,817961,5600,4,yes
+01-011-11118,well8,40.11,-80.18,18438,403,4/1/92,8/1/03,P&A,842407,4507046,556329,5964,8,no
+01-011-11119,well9,39.47,-81.96,4582,594,3/2/82,11/1/01,D&A,396784,13047048,755873,6674,10,no
+01-011-11120,well10,39.67,-80.09,4067,1117,12/1/90,4/1/04,Inactive,925462,6289380,901713,4974,12,yes
+01-011-11121,well11,40.09,-82.94,16650,710,5/1/89,3/1/02,,843321,17028320,310651,4285,3,yes
+01-011-11122,well12,40.08,-82.06,8810,1132,6/1/94,2/1/00,P&A,565327,13526938,799090,3791,2,yes
+01-011-11123,well13,40.32,-81.86,12014,907,1/1/81,10/1/04,Active,287576,2765015,887631,5237,13,yes
+01-011-11124,well14,41.48,-80.35,8744,466,4/1/92,8/1/03,P&A,654255,12864129,153095,4206,4,no
+01-011-11125,well15,40.46,-81.48,6234,1041,3/2/82,11/1/01,D&A,257182,11618644,979292,2966,12,no
+01-011-11126,well16,40.55,-80.05,6205,958,12/1/90,4/1/04,Inactive,501260,16905440,854611,6537,7,yes
+01-011-11127,well17,39.49,-80.35,7487,1063,5/1/89,3/1/02,,279300,13440975,212743,3994,4,yes
+01-011-11128,well18,39.58,-81.67,17155,520,6/1/94,2/1/00,P&A,989654,11677154,391111,2941,10,yes
+01-011-11129,well19,41.39,-79.76,9436,530,1/1/81,10/1/04,,336429,11263422,218138,4868,14,yes
+01-011-11130,well20,41.28,-80.87,17330,486,4/1/92,8/1/03,Active,760654,18392350,577262,3856,7,no
+01-011-11131,well21,40.48,-81.33,15974,735,3/2/82,11/1/01,P&A,610864,17809213,634787,3777,5,no
+01-011-11132,well22,39.31,-81.03,3809,1103,12/1/90,4/1/04,D&A,450563,16383266,690877,6558,9,yes
+01-011-11133,well23,40.87,-79.79,18347,402,5/1/89,3/1/02,Inactive,637290,10487528,222183,6008,2,yes
+01-011-11134,well24,39.50,-82.61,14796,524,6/1/94,2/1/00,,520882,1838650,398622,3304,11,yes
+01-011-11135,well25,40.13,-82.84,9082,713,1/1/81,10/1/04,P&A,133198,19101397,898242,7789,2,yes
+01-011-11136,well26,40.95,-80.71,3490,271,4/1/92,8/1/03,Active,998737,11260685,324681,2251,4,no
+01-011-11137,well27,41.06,-82.51,10637,701,3/2/82,11/1/01,P&A,675548,19773048,67015,2973,7,no
+01-011-11138,well28,41.04,-80.23,18425,1124,12/1/90,4/1/04,D&A,527738,18696547,557276,6910,14,yes
+01-011-11139,well29,40.44,-82.40,8317,776,5/1/89,3/1/02,Inactive,432543,15019071,662396,5351,10,yes
+01-011-11140,well30,41.05,-80.87,16193,459,6/1/94,2/1/00,,401944,18482705,136603,5609,8,yes
+01-011-11141,well31,39.55,-82.15,4823,567,1/1/81,10/1/04,P&A,190716,4885705,524537,4174,9,yes
+01-011-11142,well32,39.77,-82.93,19704,236,4/1/92,8/1/03,Active,424362,4879464,714630,2608,4,no
+01-011-11143,well33,41.27,-80.46,15838,1034,3/2/82,11/1/01,P&A,727307,7880742,251225,4989,8,no
+01-011-11144,well34,40.47,-82.55,9953,1130,12/1/90,4/1/04,D&A,902316,13288206,65927,7128,6,yes
+01-011-11145,well35,39.52,-80.56,10712,458,5/1/89,3/1/02,Inactive,283781,9517008,143784,6031,7,yes
+01-011-11146,well36,39.65,-80.63,13907,342,6/1/94,2/1/00,,325781,10541081,527856,2965,12,yes
+01-011-11147,well37,39.31,-79.02,13928,1068,1/1/81,8/1/03,P&A,924140,5509657,520674,2149,10,yes
+01-011-11148,well38,39.11,-82.85,9541,511,4/1/92,11/1/01,,721596,15584376,100484,2819,14,no
+01-011-11149,well39,40.78,-79.64,17214,1101,3/2/82,4/1/04,P&A,802138,12706395,854157,4220,8,no
+01-011-11150,well40,39.66,-79.52,12544,743,12/1/90,3/1/02,D&A,174963,3755279,890036,3456,9,yes
+`;
+
+// ---------- Parsing helpers ----------
+const empty=v=>v===null||v===undefined||String(v).trim()==='';
+function num(v){
+  if(typeof v==='number') return isFinite(v)?v:null;
+  if(empty(v)) return null;
+  const s=String(v).trim();
+  if(!/^[-+]?(\d{1,3}(,\d{3})+|\d*)(\.\d+)?([eE][-+]?\d+)?$/.test(s)||!/\d/.test(s)) return null;
+  const x=parseFloat(s.replace(/,/g,'')); return isFinite(x)?x:null;
+}
+function parseDate(v){
+  if(empty(v)) return null;
+  const s=String(v).trim(); let m;
+  const mk=(y,mo,d)=>{
+    if(mo<1||mo>12||d<1||d>31) return null;
+    const t=Date.UTC(y,mo-1,d), dt=new Date(t);
+    return dt.getUTCMonth()===mo-1?t:null; // rejects 31 Feb etc.
+  };
+  const yr=y=>y.length===2?(+y<30?2000+ +y:1900+ +y):+y; // Excel two-digit-year rule
+  if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$/))) return mk(+m[1],+m[2],+m[3]);
+  if((m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})(?:\s.*)?$/))) return mk(yr(m[3]),+m[1],+m[2]); // US M/D/Y
+  return null;
+}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtNum=v=>{const a=Math.abs(v); if(a>=1e10) return v.toExponential(2); if(a>=1000) return Math.round(v).toLocaleString(); if(a>=10) return (+v.toFixed(1)).toLocaleString(); return +v.toPrecision(3)+'';};
+const fmtDate=t=>new Date(t).toISOString().slice(0,10);
+const fmtV=(v,f)=>types[f]==='date'?fmtDate(v):fmtNum(v);
+
+// ---------- State ----------
+let rows=[], fields=[], types={}, label='';
+let filtAllowed=null; // Set of allowed string values for the filter column, or null
+let lastFC={type:'FeatureCollection',features:[]};
+let lastBounds=null;
+
+function colType(f){
+  const vals=rows.map(r=>r[f]).filter(v=>!empty(v));
+  if(!vals.length) return 'text';
+  if(vals.filter(v=>num(v)!==null).length/vals.length>=0.9) return 'num';
+  if(vals.filter(v=>parseDate(v)!==null).length/vals.length>=0.9) return 'date';
+  return 'text';
+}
+const val=(r,f)=>types[f]==='num'?num(r[f]):types[f]==='date'?parseDate(r[f]):(empty(r[f])?null:String(r[f]).trim());
+const catKey=(r,f)=>empty(r[f])?UNDEF_L:String(r[f]).trim();
+
+function fillSelect(sel,opts,value){
+  sel.innerHTML=opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  if(value!==undefined&&opts.includes(value)) sel.value=value;
+}
+const find=(list,re)=>list.find(f=>re.test(f));
+
+function loadRows(data,lbl,flds){
+  rows=data; label=lbl;
+  fields=(flds&&flds.length?flds:Object.keys(data[0]||{})).filter(f=>f!=='');
+  types={}; fields.forEach(f=>types[f]=colType(f));
+  const numF=fields.filter(f=>types[f]==='num'), dateF=fields.filter(f=>types[f]==='date'), textF=fields.filter(f=>types[f]==='text');
+  const lat=find(numF,/^(lat|latitude|y|lat_dd|latitude_dd)$/i)||find(numF,/lat/i)||numF[0];
+  const lon=find(numF,/^(lon|lng|long|longitude|x|lon_dd|longitude_dd)$/i)||find(numF,/lon|lng/i)||numF[1];
+  fillSelect($('latSel'),numF,lat); fillSelect($('lonSel'),numF,lon);
+  const measures=numF.filter(f=>f!==lat&&f!==lon);
+  const sizeGuess=find(measures,/oil|gas|prod|cum|volume|value/i)||measures[0];
+  fillSelect($('sizeSel'),[NONE,...measures],sizeGuess||NONE);
+  const cats=textF.filter(f=>{const n=new Set(rows.map(r=>catKey(r,f))).size;return n>1&&n<=50;});
+  const colorGuess=find(cats,/status|type|class|categ/i)||cats.find(f=>new Set(rows.map(r=>catKey(r,f))).size<=12);
+  fillSelect($('colorSel'),[NONE,...cats,...measures,...dateF],colorGuess||NONE);
+  fillSelect($('pColorSel'),[NONE,...cats,...measures,...dateF],colorGuess||NONE);
+  fillSelect($('pSizeSel'),[NONE,...measures],NONE); $('pSizeOpts').hidden=true;
+  fillSelect($('filtSel'),[NONE,...cats],NONE);
+  filtAllowed=null; $('filtBox').hidden=true;
+  const axes=[...measures,...dateF];
+  // Four plots: X = a depth-like column, Y = cumulative/production columns first
+  const X=find(axes,/depth/i)||axes[0];
+  const Ys=[...axes.filter(f=>f!==X&&/cum|oil|gas|water|prod/i.test(f)),...axes.filter(f=>f!==X&&!/cum|oil|gas|water|prod/i.test(f))];
+  const pairs=[[X,Ys[0]],[X,Ys[1]],[X,Ys[2]],[Ys[0],Ys[1]]].map(([x,y])=>[x||axes[0],y||axes[1]||axes[0]]);
+  plots=pairs.map(([x,y])=>({x,y,logx:false,logy:false,line:false,trend:'none',order:2,period:3,fitTo:'all'}));
+  buildPlotCards(axes);
+  const nameGuess=fields.find(f=>types[f]==='text'&&/name/i.test(f))||fields.find(f=>types[f]==='text');
+  fillSelect($('lblSel'),fields,nameGuess||fields[0]);
+  fillSelect($('surfSel'),[...measures,...dateF],sizeGuess||measures[0]);
+  surfKey='';
+  render(true);
+}
+
+function buildFilter(){
+  const f=$('filtSel').value;
+  if(f===NONE){filtAllowed=null;$('filtBox').hidden=true;return;}
+  const counts=new Map(); rows.forEach(r=>{const k=catKey(r,f);counts.set(k,(counts.get(k)||0)+1);});
+  const keys=[...counts.keys()].sort((a,b)=>a===UNDEF_L?1:b===UNDEF_L?-1:a.localeCompare(b,undefined,{numeric:true}));
+  filtAllowed=new Set(keys);
+  $('filtVals').innerHTML=keys.map((k,i)=>`<label class="inline"><input type="checkbox" data-k="${esc(k)}" id="fv${i}" checked> ${esc(k)} <span style="color:var(--muted)">(${counts.get(k)})</span></label>`).join('');
+  $('filtBox').hidden=false;
+}
+const passes=r=>{const f=$('filtSel').value; return f===NONE||!filtAllowed||filtAllowed.has(catKey(r,f));};
+
+// ---------- Encodings (scales use all rows, so colors stay stable when filtering) ----------
+const hex2rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function viridis(t){
+  t=Math.max(0,Math.min(1,t)); const p=t*(VIRIDIS.length-1), i=Math.min(VIRIDIS.length-2,Math.floor(p)), u=p-i;
+  const a=hex2rgb(VIRIDIS[i]), b=hex2rgb(VIRIDIS[i+1]);
+  return '#'+a.map((x,k)=>Math.round(x+(b[k]-x)*u).toString(16).padStart(2,'0')).join('');
+}
+function colorScale(f,mode){
+  if(f===NONE) return {kind:'none',get:()=>PALETTE[0],group:()=>'All'};
+  if(types[f]!=='text'){
+    const vs=rows.map(r=>val(r,f)).filter(v=>v!==null).sort((a,b)=>a-b);
+    if(!vs.length) return {kind:'none',get:()=>UNDEF,group:()=>UNDEF_L};
+    const lo=vs[0], hi=vs[vs.length-1];
+    if(mode==='cont'){
+      const t=x=>hi>lo?(x-lo)/(hi-lo):0.5;
+      return {kind:'cont',f,lo,hi,t,get:x=>x===null?UNDEF:viridis(t(x)),group:x=>x===null?UNDEF_L:'v'};
+    }
+    const k=+mode, q=p=>vs[Math.min(vs.length-1,Math.floor(p*vs.length))];
+    const cuts=Array.from({length:k-1},(_,i)=>q((i+1)/k));
+    const names=k===3?['Low','Medium','High']:['Lowest','Low','Middle','High','Highest'];
+    const cols=k===3?[VIRIDIS[0],VIRIDIS[2],VIRIDIS[4]]:VIRIDIS;
+    const edges=[lo,...cuts,hi];
+    const bins=names.map((n,i)=>({label:`${n} (${fmtV(edges[i],f)}–${fmtV(edges[i+1],f)})`,color:cols[i]}));
+    const idx=x=>{let i=0;while(i<cuts.length&&x>cuts[i])i++;return i;};
+    return {kind:'bin',bins,get:x=>x===null?UNDEF:cols[idx(x)],group:x=>x===null?UNDEF_L:bins[idx(x)].label};
+  }
+  const counts=new Map(); rows.forEach(r=>{const v=val(r,f); if(v!==null) counts.set(v,(counts.get(v)||0)+1);});
+  let keys=[...counts.keys()];
+  const top=keys.sort((a,b)=>counts.get(b)-counts.get(a)||a.localeCompare(b)).slice(0,MAXCAT).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const m=new Map(top.map((k,i)=>[k,PALETTE[i]]));
+  const nOther=keys.length-top.length;
+  return {kind:'cat',top,m,nOther,
+    get:v=>v===null?UNDEF:(m.get(v)||OTHER),
+    group:v=>v===null?UNDEF_L:(m.has(v)?v:`Other (${nOther} categories)`)};
+}
+function sizeScale(f,o){ // o: {fixedR (number, optional), maxR, log}
+  const maxR=o.maxR, minR=2.5;
+  if(o.fixedR) return {get:()=>o.fixedR,legend:null,fixed:true};
+  if(f===NONE) return {get:()=>Math.max(5,maxR*0.25),legend:null};
+  const vs=rows.map(r=>num(r[f])).filter(v=>v!==null&&v>0);
+  if(!vs.length) return {get:()=>minR,legend:null};
+  const lo=Math.min(...vs), hi=Math.max(...vs), log=o.log&&hi>lo;
+  const get=x=>{
+    if(x===null||x<=0) return minR;
+    if(log) return minR+(maxR-minR)*(Math.log(x)-Math.log(lo))/(Math.log(hi)-Math.log(lo));
+    return Math.max(minR,maxR*Math.sqrt(x/hi));
+  };
+  const mid=log?Math.sqrt(lo*hi):(lo+hi)/2;
+  return {get,log,legend:(hi>lo?[hi,mid,lo]:[hi]).map(v=>({v,r:get(v)}))};
+}
+
+// ---------- Map ----------
+const esriUrl=s=>`https://server.arcgisonline.com/ArcGIS/rest/services/${s}/MapServer/tile/{z}/{y}/{x}`;
+const raster=(url,attribution,maxzoom=19)=>({version:8,sources:{base:{type:'raster',tiles:[url],tileSize:256,attribution,maxzoom}},layers:[{id:'base',type:'raster',source:'base'}]});
+const BASES={
+  'Light gray':raster(esriUrl('Canvas/World_Light_Gray_Base'),'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',16),
+  'Satellite':raster(esriUrl('World_Imagery'),'Tiles &copy; Esri &mdash; Esri, Maxar, Earthstar Geographics, GIS User Community'),
+  'Topographic':raster(esriUrl('World_Topo_Map'),'Tiles &copy; Esri'),
+  'Vector light (OpenFreeMap)':'https://tiles.openfreemap.org/styles/positron',
+  'Vector streets (OpenFreeMap)':'https://tiles.openfreemap.org/styles/liberty'
+};
+const map=new maplibregl.Map({container:'map',style:BASES['Topographic'],center:[-80,40],zoom:4,attributionControl:{compact:true}});
+map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),'top-left');
+map.addControl(new maplibregl.ScaleControl({unit:'imperial'}),'bottom-left');
+
+class BaseControl{
+  onAdd(){
+    const d=document.createElement('div'); d.className='maplibregl-ctrl base-ctl';
+    d.innerHTML=Object.keys(BASES).map((k,i)=>`<label><input type="radio" name="base" value="${esc(k)}" ${k==='Topographic'?'checked':''}> ${esc(k)}</label>`).join('');
+    d.addEventListener('change',e=>{ if(e.target.name==='base'){ styleReady=false; map.setStyle(BASES[e.target.value],{diff:false}); } });
+    return d;
+  }
+  onRemove(){}
+}
+map.addControl(new BaseControl(),'top-right');
+
+function paintProps(){
+  const op=+$('op').value;
+  return {'circle-radius':['get','rad'],'circle-color':['get','col'],'circle-opacity':op,
+    'circle-stroke-color':['get','col'],'circle-stroke-width':1,'circle-stroke-opacity':Math.min(1,op+0.25)};
+}
+// Re-add the data layer whenever a basemap style (re)loads
+function ensureData(){
+  if(!map.getSource('pts')) map.addSource('pts',{type:'geojson',data:lastFC});
+  else map.getSource('pts').setData(lastFC);
+  const vis=$('showWells').checked?'visible':'none';
+  if(!map.getLayer('pts')) map.addLayer({id:'pts',type:'circle',source:'pts',layout:{'circle-sort-key':['*',-1,['get','rad']],visibility:vis},paint:paintProps()});
+  else { map.setLayoutProperty('pts','visibility',vis); Object.entries(paintProps()).forEach(([k,v])=>map.setPaintProperty('pts',k,v)); }
+  if(surf&&!map.getLayer('surf')) addSurfaceLayer();
+}
+let styleReady=false; // set when a basemap style has finished parsing (tiles may still be loading)
+map.on('style.load',()=>{styleReady=true;ensureData();});
+
+map.on('click','pts',e=>{
+  const f=e.features.reduce((a,b)=>b.properties.rad<a.properties.rad?b:a); // smallest under the cursor wins
+  const r=rows[f.properties.i];
+  const html='<table class="popup">'+fields.map(k=>`<tr><td>${esc(k)}</td><td>${esc(empty(r[k])?'—':r[k])}</td></tr>`).join('')+'</table>';
+  new maplibregl.Popup({maxWidth:'340px'}).setLngLat(f.geometry.coordinates).setHTML(html).addTo(map);
+});
+map.on('mouseenter','pts',()=>map.getCanvas().style.cursor='pointer');
+map.on('mouseleave','pts',()=>map.getCanvas().style.cursor='');
+
+function fitData(){
+  if(!lastBounds) return;
+  const [[w,s],[e,n]]=lastBounds;
+  if(w===e&&s===n) map.jumpTo({center:[w,s],zoom:10});
+  else map.fitBounds(lastBounds,{padding:{top:80,bottom:60,left:70,right:70},maxZoom:12,duration:0});
+}
+
+// ---------- Well-name labels ----------
+let labelMarkers=[];
+function drawLabels(mp){
+  labelMarkers.forEach(m=>m.remove()); labelMarkers=[];
+  $('lblBox').hidden=!$('showLbl').checked;
+  const f=$('lblSel').value;
+  if(!$('showLbl').checked||!$('showWells').checked||!f) return;
+  mp.forEach(p=>{
+    const t=p.r[f]; if(empty(t)) return;
+    const el=document.createElement('div'); el.className='well-lbl'; el.textContent=String(t).trim();
+    labelMarkers.push(new maplibregl.Marker({element:el,anchor:'left',offset:[p.rad+3,0]}).setLngLat([p.lo,p.la]).addTo(map));
+  });
+}
+
+// ---------- Interpolated surface (inverse-distance weighting) ----------
+const SPECTRAL=['#3288bd','#66c2a5','#abdda4','#e6f598','#fee08b','#fdae61','#f46d43','#d53e4f'];
+function ramp(stops,t){
+  t=Math.max(0,Math.min(1,t)); const p=t*(stops.length-1), i=Math.min(stops.length-2,Math.floor(p)), u=p-i;
+  const a=hex2rgb(stops[i]), b=hex2rgb(stops[i+1]); return a.map((x,k)=>Math.round(x+(b[k]-x)*u));
+}
+const mercY=lat=>Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));
+const invMercY=y=>(2*Math.atan(Math.exp(y))-Math.PI/2)*180/Math.PI;
+function hull(P){ // convex hull, monotone chain; P = [[x,y],...]
+  const pts=[...P].sort((a,b)=>a[0]-b[0]||a[1]-b[1]), cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[],up=[];
+  for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
+  for(const p of pts.reverse()){while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
+  return lo.slice(0,-1).concat(up.slice(0,-1));
+}
+function inHull(H,x,y){ // H counter-clockwise
+  for(let i=0;i<H.length;i++){const a=H[i],b=H[(i+1)%H.length]; if((b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0])<-1e-12) return false;}
+  return true;
+}
+let surf=null, surfKey='';
+function removeSurface(){
+  if(map.getLayer('surf')) map.removeLayer('surf');
+  if(map.getSource('surf')) map.removeSource('surf');
+}
+function addSurfaceLayer(){
+  if(!surf||!styleReady) return;
+  if(!map.getSource('surf')) map.addSource('surf',{type:'image',url:surf.url,coordinates:surf.coords});
+  else map.getSource('surf').updateImage({url:surf.url,coordinates:surf.coords});
+  if(!map.getLayer('surf')) map.addLayer({id:'surf',type:'raster',source:'surf',paint:{'raster-opacity':+$('surfOp').value,'raster-fade-duration':0,'raster-resampling':'linear'}},map.getLayer('pts')?'pts':undefined);
+  else map.setPaintProperty('surf','raster-opacity',+$('surfOp').value);
+}
+function updateSurface(mp){
+  if(curTab!=='surf'||!rows.length){ surf=null; surfKey=''; removeSurface(); $('readout').hidden=true; return; }
+  const f=$('surfSel').value, pw=+$('surfPow').value, res=+$('surfRes').value, clip=$('surfClip').checked;
+  const P=mp.map(p=>({x:p.lo,y:p.la,v:val(p.r,f)})).filter(p=>p.v!==null);
+  const key=JSON.stringify([f,pw,res,clip,P.map(p=>[p.x,p.y,p.v])]);
+  if(key===surfKey&&surf){ addSurfaceLayer(); return; }
+  surfKey=key;
+  const locs=new Set(P.map(p=>p.x+','+p.y));
+  if(locs.size<3){ surf=null; removeSurface(); $('surfMsg').textContent=`Need at least 3 wells with values for “${f}” (found ${locs.size}).`; return; }
+  let w=Math.min(...P.map(p=>p.x)), e=Math.max(...P.map(p=>p.x)), s=Math.min(...P.map(p=>p.y)), n=Math.max(...P.map(p=>p.y));
+  const padX=Math.max((e-w)*0.06,0.01), padY=Math.max((n-s)*0.06,0.01);
+  w-=padX; e+=padX; s=Math.max(-84,s-padY); n=Math.min(84,n+padY);
+  const ys=mercY(s), yn=mercY(n), spanX=(e-w)*Math.PI/180, spanY=yn-ys;
+  const W=spanX>=spanY?res:Math.max(8,Math.round(res*spanX/spanY)), H=spanX>=spanY?Math.max(8,Math.round(res*spanY/spanX)):res;
+  let H0=hull(P.map(p=>[p.x,p.y])), useClip=clip;
+  if(clip&&H0.length<3){ useClip=false; }
+  const kx=Math.cos(((s+n)/2)*Math.PI/180); // distances in locally scaled degrees
+  const vals=P.map(p=>p.v), lo=Math.min(...vals), hi=Math.max(...vals);
+  const grid=new Float64Array(W*H).fill(NaN);
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d'), img=ctx.createImageData(W,H);
+  for(let j=0;j<H;j++){
+    const lat=invMercY(yn-(j+0.5)/H*spanY);
+    for(let i=0;i<W;i++){
+      const lon=w+(i+0.5)/W*(e-w);
+      if(useClip&&!inHull(H0,lon,lat)) continue;
+      let num_=0, den=0, exact=null;
+      for(const p of P){
+        const dx=(lon-p.x)*kx, dy=lat-p.y, d2=dx*dx+dy*dy;
+        if(d2<1e-14){exact=p.v;break;}
+        const wt=1/Math.pow(d2,pw/2); num_+=wt*p.v; den+=wt;
+      }
+      const v=exact!==null?exact:num_/den, k=j*W+i;
+      grid[k]=v;
+      const c=ramp(SPECTRAL,hi>lo?(v-lo)/(hi-lo):0.5);
+      img.data[4*k]=c[0]; img.data[4*k+1]=c[1]; img.data[4*k+2]=c[2]; img.data[4*k+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  surf={f,lo,hi,W,H,w,e,ys,yn,grid,url:cv.toDataURL('image/png'),coords:[[w,n],[e,n],[e,s],[w,s]]};
+  $('surfMsg').textContent=`Built from ${P.length} wells${clip&&!useClip?' (wells lie on a line, so the area limit was skipped)':''}. Hover over the map to read values.`;
+  addSurfaceLayer();
+}
+map.on('mousemove',e=>{
+  if(!surf){ $('readout').hidden=true; return; }
+  const {lng,lat}=e.lngLat, i=Math.floor((lng-surf.w)/(surf.e-surf.w)*surf.W), j=Math.floor((surf.yn-mercY(lat))/(surf.yn-surf.ys)*surf.H);
+  const v=(i>=0&&j>=0&&i<surf.W&&j<surf.H)?surf.grid[j*surf.W+i]:NaN;
+  if(isNaN(v)){ $('readout').hidden=true; return; }
+  $('readout').textContent=`${surf.f}: ${fmtV(v,surf.f)} (estimated)`; $('readout').hidden=false;
+});
+map.on('mouseout',()=>{$('readout').hidden=true;});
+
+// ---------- Legend ----------
+function drawLegend(cF,cs,sF,ss,pts){
+  const box=$('legend');
+  const wellsOn=$('showWells').checked, showC=wellsOn&&cF!==NONE, showS=wellsOn&&!!ss.legend, showSurf=!!surf;
+  if(!$('showLeg').checked||(!showC&&!showS&&!showSurf)){box.hidden=true;return;}
+  let html='';
+  if(showSurf){
+    const stops=SPECTRAL.map((c,i)=>`${c} ${i/(SPECTRAL.length-1)*100}%`).join(',');
+    const ticks=[0,0.25,0.5,0.75,1].map(t=>{const v=surf.lo+(surf.hi-surf.lo)*t;return `<span style="top:${(1-t)*100}%">${esc(fmtV(v,surf.f))}</span>`;}).join('');
+    html+=`<div class="sec"><h3>Surface: ${esc(surf.f)}</h3><div class="cbar"><div class="ramp" style="background:linear-gradient(to top,${stops})"></div><div class="ticks">${ticks}</div></div></div>`;
+  }
+  if(showC){
+    html+=`<div class="sec"><h3>${esc(cF)}</h3>`;
+    const hasUndef=pts.some(p=>p.cv===null);
+    if(cs.kind==='cont'){
+      const stops=VIRIDIS.map((c,i)=>`${c} ${i/(VIRIDIS.length-1)*100}%`).join(',');
+      const ticks=[0,0.25,0.5,0.75,1].map(t=>{const v=cs.lo+(cs.hi-cs.lo)*t;return `<span style="top:${(1-t)*100}%">${esc(fmtV(v,cF))}</span>`;}).join('');
+      html+=`<div class="cbar"><div class="ramp" style="background:linear-gradient(to top,${stops})"></div><div class="ticks">${ticks}</div></div>`;
+    } else {
+      const items=cs.kind==='bin'?cs.bins:[...cs.top.map(k=>({label:k,color:cs.m.get(k)})),...(cs.nOther?[{label:`Other (${cs.nOther} categories)`,color:OTHER}]:[])];
+      const present=new Set(pts.map(p=>p.grp));
+      html+=items.filter(i=>present.has(i.label)).map(i=>`<div class="leg-item"><span class="sw" style="background:${i.color}"></span>${esc(i.label)}</div>`).join('');
+    }
+    if(hasUndef) html+=`<div class="leg-item"><span class="sw" style="background:${UNDEF}"></span>${esc(UNDEF_L)}</div>`;
+    html+='</div>';
+  }
+  if(showS){
+    const R=ss.legend[0].r, W=2*R+110, H=2*R+12, cx=R+6, base=H-6;
+    const circ=ss.legend.map(c=>`<circle cx="${cx}" cy="${base-c.r}" r="${c.r}" fill="#8a8a8a" fill-opacity="0.5" stroke="#555"/>
+      <line x1="${cx}" y1="${base-2*c.r}" x2="${2*R+18}" y2="${base-2*c.r}" stroke="#888" stroke-dasharray="2 2"/>
+      <text x="${2*R+22}" y="${base-2*c.r+4}">${esc(fmtNum(c.v))}</text>`).join('');
+    html+=`<div class="sec"><h3>${esc(sF)}${ss.log?' (log scale)':''}</h3><svg width="${W}" height="${H}" role="img" aria-label="Bubble size legend">${circ}</svg></div>`;
+  }
+  box.innerHTML=html; box.hidden=false;
+}
+
+// ---------- Render ----------
+function render(fit){
+  if(!rows.length){ $('mapTitle').textContent=$('titleIn').value.trim(); return; }
+  const latF=$('latSel').value, lonF=$('lonSel').value, sF=$('sizeSel').value, cF=$('colorSel').value;
+  const geoScatter=document.querySelector('input[name=mode]:checked').value==='scatter';
+  const cs=colorScale(cF,$('cmodeSel').value);
+  const ss=sizeScale(sF,{fixedR:geoScatter?+$('mkR').value:0,maxR:+$('maxR').value,log:$('scaleSel').value==='log'});
+  const shown=rows.map((r,i)=>({r,i})).filter(o=>passes(o.r));
+  const pts=[]; let bad=0, noSize=0;
+  shown.forEach(({r,i})=>{
+    const la=num(r[latF]), lo=num(r[lonF]);
+    const cv=cF===NONE?0:val(r,cF), sv=sF===NONE?null:num(r[sF]);
+    if(!ss.fixed&&sF!==NONE&&(sv===null||sv<=0)) noSize++;
+    const p={r,i,la,lo,cv,sv,col:cF===NONE?PALETTE[0]:cs.get(cv),grp:cs.group(cv),rad:ss.get(sv)};
+    if(la===null||lo===null||Math.abs(la)>90||Math.abs(lo)>180){bad++;p.nomap=true;}
+    pts.push(p);
+  });
+  const mp=pts.filter(p=>!p.nomap);
+  lastFC={type:'FeatureCollection',features:mp.map(p=>({type:'Feature',geometry:{type:'Point',coordinates:[p.lo,p.la]},properties:{i:p.i,col:p.col,rad:p.rad}}))};
+  lastBounds=mp.length?[[Math.min(...mp.map(p=>p.lo)),Math.min(...mp.map(p=>p.la))],[Math.max(...mp.map(p=>p.lo)),Math.max(...mp.map(p=>p.la))]]:null;
+  if(styleReady) ensureData();
+  if(fit) fitData();
+
+  let msg=`${label}: showing ${mp.length} of ${rows.length} rows on the map.`;
+  if(shown.length<rows.length) msg+=` ${rows.length-shown.length} hidden by the filter.`;
+  if(bad) msg+=` ${bad} skipped (missing or invalid coordinates).`;
+  if(noSize) msg+=` ${noSize} with no positive size value drawn at minimum size.`;
+  $('status').textContent=msg;
+
+  $('mapTitle').textContent=$('titleIn').value.trim();
+  updateSurface(mp);
+  drawLabels(mp);
+  drawLegend(cF,cs,sF,ss,mp);
+  if(!$('plotView').hidden) drawPlots();
+}
+
+// ---------- Scatter plots (2 x 2 grid) ----------
+let plots=[];
+function buildPlotCards(axes){
+  const opts=sel=>axes.map(a=>`<option value="${esc(a)}"${a===sel?' selected':''}>${esc(a)}</option>`).join('');
+  $('pgrid').innerHTML=plots.map((p,i)=>`
+    <div class="pcard">
+      <div class="pplot" id="plot${i}"></div>
+      <div class="pctl" data-i="${i}">
+        <div class="prow">
+          <label>X <select data-k="x" aria-label="Plot ${i+1} X axis">${opts(p.x)}</select></label>
+          <label><input type="checkbox" data-k="logx"> log</label>
+          <label>Y <select data-k="y" aria-label="Plot ${i+1} Y axis">${opts(p.y)}</select></label>
+          <label><input type="checkbox" data-k="logy"> log</label>
+          <label style="margin-left:auto"><input type="checkbox" data-k="line"> Connect points</label>
+        </div>
+        <div class="prow">
+          <span class="tl">Trendline</span>
+          <select data-k="trend" aria-label="Plot ${i+1} trendline">
+            <option value="none">None</option><option value="linear">Linear</option><option value="exp">Exponential</option>
+            <option value="log">Logarithmic</option><option value="power">Power</option><option value="poly">Polynomial</option><option value="ma">Moving average</option>
+          </select>
+          <label data-show="poly" hidden>Order <select data-k="order">${[2,3,4,5,6].map(o=>`<option>${o}</option>`).join('')}</select></label>
+          <label data-show="ma" hidden>Period <select data-k="period">${[2,3,4,5,6,8,10].map(o=>`<option${o===3?' selected':''}>${o}</option>`).join('')}</select></label>
+          <label data-show="fit" hidden>Fit <select data-k="fitTo"><option value="all">All points</option><option value="group">Each color group</option></select></label>
+        </div>
+      </div>
+    </div>`).join('');
+}
+$('pgrid').addEventListener('change',e=>{
+  const box=e.target.closest('.pctl'); if(!box) return;
+  const p=plots[+box.dataset.i], k=e.target.dataset.k;
+  if(e.target.type==='checkbox') p[k]=e.target.checked; else p[k]=e.target.value;
+  if(k==='order'||k==='period') p[k]=+p[k];
+  if(k==='trend'){
+    box.querySelector('[data-show=poly]').hidden=p.trend!=='poly';
+    box.querySelector('[data-show=ma]').hidden=p.trend!=='ma';
+    box.querySelector('[data-show=fit]').hidden=p.trend==='none';
+  }
+  drawPlots(+box.dataset.i);
+});
+// ---------- Trendlines ----------
+function solve(A,b){ // Gaussian elimination with partial pivoting
+  const n=b.length; A=A.map(r=>[...r]); b=[...b];
+  for(let c=0;c<n;c++){
+    let m=c; for(let r=c+1;r<n;r++) if(Math.abs(A[r][c])>Math.abs(A[m][c])) m=r;
+    if(Math.abs(A[m][c])<1e-12) return null;
+    [A[c],A[m]]=[A[m],A[c]]; [b[c],b[m]]=[b[m],b[c]];
+    for(let r=c+1;r<n;r++){const f=A[r][c]/A[c][c]; for(let k=c;k<n;k++) A[r][k]-=f*A[c][k]; b[r]-=f*b[c];}
+  }
+  const x=new Array(n);
+  for(let r=n-1;r>=0;r--){let t=b[r]; for(let k=r+1;k<n;k++) t-=A[r][k]*x[k]; x[r]=t/A[r][r];}
+  return x;
+}
+function polyfit(X,Y,deg){ // fit on centred/scaled x for stability, then expand to powers of x
+  const n=X.length, mx=X.reduce((a,b)=>a+b,0)/n, sx=Math.sqrt(X.reduce((a,b)=>a+(b-mx)**2,0)/n)||1;
+  const Z=X.map(x=>(x-mx)/sx), m=deg+1;
+  const A=Array.from({length:m},(_,i)=>Array.from({length:m},(_,j)=>Z.reduce((a,z)=>a+z**(i+j),0)));
+  const b=Array.from({length:m},(_,i)=>Z.reduce((a,z,k)=>a+Y[k]*z**i,0));
+  const cz=solve(A,b); if(!cz) return null;
+  const binom=(n_,k)=>{let r=1;for(let i=1;i<=k;i++) r=r*(n_-i+1)/i;return r;};
+  const c=new Array(m).fill(0); // sum cz_j ((x-mx)/sx)^j
+  for(let j=0;j<m;j++) for(let k=0;k<=j;k++) c[k]+=cz[j]*binom(j,k)*(-mx)**(j-k)/sx**j;
+  return {c,f:x=>{const z=(x-mx)/sx;return cz.reduce((a,v,j)=>a+v*z**j,0);}};
+}
+function r2(Y,F){const m=Y.reduce((a,b)=>a+b,0)/Y.length; const st=Y.reduce((a,y)=>a+(y-m)**2,0), se=Y.reduce((a,y,i)=>a+(y-F[i])**2,0); return st>0?1-se/st:NaN;}
+const fmtC=v=>{if(!isFinite(v))return String(v); const a=Math.abs(v); if(a!==0&&(a<1e-3||a>=1e5)){const [m,e]=v.toExponential(3).split('e');return `${+m}×10<sup>${+e}</sup>`;} return String(+v.toPrecision(4));};
+const sgn=(v,first)=>v<0?(first?'−':' − '):(first?'':' + ');
+// pts: [{x,y}] in fitting units. Returns {f, eq, r2, note} or {err}
+function fitTrend(kind,pts,opt){
+  const minN={linear:2,exp:2,log:2,power:2,poly:opt.order+1,ma:opt.period}[kind];
+  let P=pts, skipped=0;
+  if(kind==='log'||kind==='power'){const q=P.filter(p=>p.x>0); skipped+=P.length-q.length; P=q;}
+  if(kind==='exp'||kind==='power'){const q=P.filter(p=>p.y>0); skipped+=P.length-q.length; P=q;}
+  if(P.length<minN) return {err:`too few usable points (${P.length}; needs ${minN})`};
+  const X=P.map(p=>p.x), Y=P.map(p=>p.y), xs=opt.xs;
+  let f, eq, R;
+  if(kind==='linear'||kind==='poly'){
+    const d=kind==='linear'?1:opt.order, fit=polyfit(X,Y,d); if(!fit) return {err:'could not fit (X values too similar)'};
+    f=fit.f; R=r2(Y,X.map(f));
+    const xm=Math.max(...X.map(Math.abs))||1, mag=fit.c.map((v,k)=>Math.abs(v)*xm**k), big=Math.max(...mag);
+    const terms=fit.c.map((v,k)=>({v,k})).reverse().filter(t=>mag[t.k]>big*1e-9); // drop round-off terms
+    eq='y = '+terms.map((t,i)=>sgn(t.v,i===0)+(t.k>0&&Math.abs(Math.abs(t.v)-1)<1e-12?'':fmtC(Math.abs(t.v)))+(t.k===0?'':t.k===1?xs:`${xs}<sup>${t.k}</sup>`)).join('');
+  } else if(kind==='exp'){
+    const fit=polyfit(X,Y.map(Math.log),1); if(!fit) return {err:'could not fit'};
+    const a=Math.exp(fit.c[0]), b=fit.c[1]; f=x=>a*Math.exp(b*x); R=r2(Y.map(Math.log),X.map(x=>fit.f(x)));
+    eq=`y = ${fmtC(a)}·e<sup>${fmtC(b)}${xs}</sup>`;
+  } else if(kind==='log'){
+    const L=X.map(Math.log), fit=polyfit(L,Y,1); if(!fit) return {err:'could not fit'};
+    const a=fit.c[0], b=fit.c[1]; f=x=>x>0?a+b*Math.log(x):NaN; R=r2(Y,L.map(fit.f));
+    eq=`y = ${fmtC(b)}·ln(${xs})${sgn(a,false)}${fmtC(Math.abs(a))}`;
+  } else if(kind==='power'){
+    const L=X.map(Math.log), fit=polyfit(L,Y.map(Math.log),1); if(!fit) return {err:'could not fit'};
+    const a=Math.exp(fit.c[0]), b=fit.c[1]; f=x=>x>0?a*Math.pow(x,b):NaN; R=r2(Y.map(Math.log),L.map(fit.f));
+    eq=`y = ${fmtC(a)}·${xs}<sup>${fmtC(b)}</sup>`;
+  } else if(kind==='ma'){
+    const S=[...P].sort((a,b)=>a.x-b.x), n=opt.period, out=[];
+    for(let i=n-1;i<S.length;i++){let t=0;for(let k=i-n+1;k<=i;k++) t+=S[k].y; out.push({x:S[i].x,y:t/n});}
+    return {ma:out,eq:`${n}-point moving average`,skipped};
+  }
+  const nPar=kind==='poly'?opt.order+1:2; let note='';
+  if(P.length<=nPar) note=' ⚠ exact fit (as many terms as points): not meaningful';
+  else if(kind==='poly'&&P.length<=nPar+1) note=' ⚠ very few points for this order';
+  return {f,eq,r2:R,skipped,note,xmin:Math.min(...X),xmax:Math.max(...X),logR2:kind==='exp'||kind==='power'};
+}
+
+function plotLegendHTML(cF,cs,pts){
+  if(cF===NONE) return '';
+  let h=`<span class="lt">${esc(cF)}</span>`;
+  if(cs.kind==='cont'){
+    const stops=VIRIDIS.map((c,i)=>`${c} ${i/(VIRIDIS.length-1)*100}%`).join(',');
+    h+=`<span class="hbar"><span>${esc(fmtV(cs.lo,cF))}</span><span class="hramp" style="background:linear-gradient(to right,${stops})"></span><span>${esc(fmtV(cs.hi,cF))}</span></span>`;
+  } else {
+    const items=cs.kind==='bin'?cs.bins:[...cs.top.map(k=>({label:k,color:cs.m.get(k)})),...(cs.nOther?[{label:`Other (${cs.nOther} categories)`,color:OTHER}]:[])];
+    const present=new Set(pts.map(p=>p.grp));
+    h+=items.filter(i=>present.has(i.label)).map(i=>`<span class="leg-item"><span class="sw" style="background:${i.color}"></span>${esc(i.label)}</span>`).join('');
+  }
+  if(pts.some(p=>p.cv===null)) h+=`<span class="leg-item"><span class="sw" style="background:${UNDEF}"></span>${esc(UNDEF_L)}</span>`;
+  return h;
+}
+function drawPlots(only){
+  if(!rows.length){ plots.forEach((_,i)=>$('plot'+i)&&Plotly.purge('plot'+i)); $('plotLegend').innerHTML=''; return; }
+  const cssv=getComputedStyle(document.documentElement);
+  const ink=cssv.getPropertyValue('--ink').trim(), line=cssv.getPropertyValue('--line').trim();
+  const nameF=$('lblSel').value||fields.find(f=>types[f]==='text');
+  const cF=$('pColorSel').value, sF=$('pSizeSel').value, useSize=sF!==NONE;
+  const cs=colorScale(cF,$('pCmodeSel').value);
+  const ss=sizeScale(sF,{maxR:+$('pMaxR').value/2,log:$('pScaleSel').value==='log'});
+  const all=rows.filter(passes).map(r=>{
+    const cv=cF===NONE?0:val(r,cF), sv=useSize?num(r[sF]):null;
+    return {r,cv,col:cF===NONE?PALETTE[0]:cs.get(cv),grp:cs.group(cv),rad:ss.get(sv)};
+  });
+  $('plotTitle').textContent=$('titleIn').value.trim();
+  $('plotLegend').innerHTML=plotLegendHTML(cF,cs,all);
+  const op=+$('pOp').value;
+  plots.forEach((P,i)=>{
+    if(only!==undefined&&only!==i) return;
+    const xF=P.x, yF=P.y;
+    const lx=P.logx&&types[xF]==='num', ly=P.logy&&types[yF]==='num';
+    const pts=all.map(p=>({...p,x:val(p.r,xF),y:val(p.r,yF)})).filter(p=>p.x!==null&&p.y!==null&&(!lx||p.x>0)&&(!ly||p.y>0));
+    const conv=(v,f)=>types[f]==='date'?new Date(v):v;
+    const mode=P.line?'lines+markers':'markers';
+    const sz=p=>P.line?(useSize?Math.max(4,p.rad):5):(useSize?2*p.rad:8);
+    const mk=list=>{
+      const L=P.line?[...list].sort((a,b)=>a.x-b.x):list; // lines join points in X order
+      return {x:L.map(p=>conv(p.x,xF)),y:L.map(p=>conv(p.y,yF)),text:L.map(p=>nameF?String(p.r[nameF]??''):''),_L:L,
+        type:'scatter',mode,hovertemplate:`%{text}<br>${esc(xF)}: %{x}<br>${esc(yF)}: %{y}<extra></extra>`};
+    };
+    let traces=[];
+    if(cs.kind==='cont'){
+      const ok=mk(pts.filter(p=>p.cv!==null)), un=pts.filter(p=>p.cv===null);
+      traces.push({...ok,showlegend:false,line:{color:'#8a8a8a',width:1.5},marker:{size:ok._L.map(sz),opacity:op,color:ok._L.map(p=>p.cv),cmin:cs.lo,cmax:cs.hi,
+        colorscale:VIRIDIS.map((c,k)=>[k/(VIRIDIS.length-1),c]),showscale:false,line:{width:0.5,color:'rgba(0,0,0,.4)'}}});
+      if(un.length){const u=mk(un); traces.push({...u,showlegend:false,line:{color:UNDEF,width:1.5},marker:{size:u._L.map(sz),opacity:op,color:UNDEF}});}
+    } else {
+      const groups=new Map(); pts.forEach(p=>{if(!groups.has(p.grp)) groups.set(p.grp,[]); groups.get(p.grp).push(p);});
+      traces=[...groups.values()].map(g=>{const t=mk(g);return {...t,showlegend:false,line:{color:g[0].col,width:1.8},marker:{size:t._L.map(sz),opacity:op,color:g[0].col,line:{width:0.5,color:'rgba(0,0,0,.4)'}}};});
+    }
+    traces.forEach(t=>delete t._L);
+    if(!P.line) traces.forEach(t=>t.mode='markers');
+    const ann=[];
+    if(P.trend!=='none'){
+      const bg=cssv.getPropertyValue('--bg').trim();
+      if(types[yF]!=='num'){ ann.push('Trendlines need a numeric Y axis'); }
+      else {
+        const isDateX=types[xF]==='date', YR=365.25*864e5, x0=isDateX?Math.min(...pts.map(p=>p.x)):0;
+        const toU=x=>isDateX?(x-x0)/YR:x, fromU=u=>isDateX?x0+u*YR:u;
+        const xs=isDateX?'t':'x';
+        let groups;
+        if(P.fitTo==='group'&&cs.kind!=='cont'&&cs.kind!=='none'){
+          const g=new Map(); pts.forEach(p=>{if(!g.has(p.grp)) g.set(p.grp,{name:p.grp,col:p.col,list:[]}); g.get(p.grp).list.push(p);}); groups=[...g.values()];
+        } else groups=[{name:'All points',col:cssv.getPropertyValue('--ink').trim(),list:pts}];
+        const tooFew=[];
+        groups.forEach(G=>{
+          const res=fitTrend(P.trend,G.list.map(p=>({x:toU(p.x),y:p.y})),{order:P.order,period:P.period,xs});
+          const tag=groups.length>1?`<b>${esc(G.name)}</b>: `:'';
+          if(res.err){ if(groups.length>1) tooFew.push(G.name); else ann.push(`<span style="color:${G.col}">${res.err}</span>`); return; }
+          let xsU, ysU;
+          if(res.ma){ xsU=res.ma.map(p=>p.x); ysU=res.ma.map(p=>p.y); }
+          else {
+            const N=200, a=res.xmin, b=res.xmax;
+            xsU=Array.from({length:N},(_,k)=>{const t=k/(N-1); return lx&&a>0?a*Math.pow(b/a,t):a+(b-a)*t;});
+            ysU=xsU.map(res.f);
+          }
+          const keep=xsU.map((x,k)=>isFinite(ysU[k])&&(!ly||ysU[k]>0));
+          traces.push({x:xsU.filter((_,k)=>keep[k]).map(u=>isDateX?new Date(fromU(u)):u),y:ysU.filter((_,k)=>keep[k]),type:'scatter',mode:'lines',
+            line:{color:G.col,width:2.2,dash:groups.length>1?'solid':'dash'},hoverinfo:'skip',showlegend:false});
+          let txt=`${tag}${res.eq}`;
+          if(res.r2!==undefined&&isFinite(res.r2)) txt+=`   R² = ${res.r2.toFixed(3)}${res.logR2?' (on ln y)':''}`;
+          if(res.skipped) txt+=`   (${res.skipped} pts ≤0 skipped)`;
+          if(res.note) txt+=`<br><span style="font-size:10.5px">${res.note.trim()}</span>`;
+          ann.push(`<span style="color:${G.col}">${txt}</span>`);
+        });
+        if(tooFew.length) ann.push(`<span style="font-size:10.5px">Too few points to fit: ${tooFew.map(esc).join(', ')}</span>`);
+        if(isDateX) ann.push(`<span style="font-size:10.5px">t = years since ${fmtDate(x0)}</span>`);
+        if(P.fitTo==='group'&&(cs.kind==='cont'||cs.kind==='none')) ann.push('<span style="font-size:10.5px">Color is not grouped, so one line is fitted to all points</span>');
+      }
+      var trendAnn=ann.length?[{text:ann.join('<br>'),showarrow:false,xref:'paper',yref:'paper',x:0.01,y:0.99,xanchor:'left',yanchor:'top',align:'left',
+        bgcolor:bg+'dd',bordercolor:line,borderwidth:1,borderpad:4,font:{size:11,color:ink}}]:[];
+    }
+    const ax=(f,log)=>({title:{text:f,standoff:6},type:types[f]==='date'?'date':log?'log':'linear',gridcolor:line,zerolinecolor:line,color:ink,automargin:true});
+    Plotly.react('plot'+i,traces,{
+      paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:ink,family:'Barlow, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif',size:12},
+      xaxis:ax(xF,lx),yaxis:ax(yF,ly),showlegend:false,margin:{l:60,r:16,t:14,b:46},hovermode:'closest',
+      annotations:pts.length?(P.trend!=='none'?trendAnn:[]):[{text:'No rows have values for both axes',showarrow:false,xref:'paper',yref:'paper',x:0.5,y:0.5,font:{color:ink}}]
+    },{responsive:true,displaylogo:false,toImageButtonOptions:{filename:`plot_${i+1}_${yF}_vs_${xF}`.replace(/[^\w.-]+/g,'_'),scale:2}});
+  });
+}
+
+// ---------- Tabs & events ----------
+let curTab='map';
+const TABS={map:'tabMap',surf:'tabSurf',plot:'tabPlot',data:'tabData'};
+function showTab(which){
+  curTab=which;
+  Object.entries(TABS).forEach(([k,id])=>$(id).setAttribute('aria-selected',k===which));
+  $('aboutView').hidden=true; $('aboutBtn').setAttribute('aria-pressed','false');
+  const onMap=which==='map'||which==='surf';
+  $('mapView').hidden=!onMap; $('plotView').hidden=which!=='plot'; $('dataView').hidden=which!=='data';
+  $('mapOpts').hidden=!onMap; $('surfOpts').hidden=which!=='surf'; $('plotOpts').hidden=which!=='plot';
+  $('dataOpts').hidden=which!=='data'; $('filtFs').hidden=which==='data';
+  if(which==='data'&&!$('dtable').rows.length) dtRender();
+  if(onMap){ map.resize(); render(false); } else if(which==='plot') drawPlots();
+  if(which!=='surf'){ surf=null; surfKey=''; removeSurface(); $('readout').hidden=true; }
+}
+Object.entries(TABS).forEach(([k,id])=>$(id).addEventListener('click',()=>showTab(k)));
+$('backBtn').addEventListener('click',()=>showTab('map'));
+$('aboutBtn').addEventListener('click',()=>{
+  if(!$('aboutView').hidden){showTab(curTab);return;}
+  ['mapView','plotView','dataView'].forEach(id=>$(id).hidden=true); $('aboutView').hidden=false;
+  $('aboutBtn').setAttribute('aria-pressed','true');
+  Object.values(TABS).forEach(id=>$(id).setAttribute('aria-selected','false'));
+});
+
+// ---------- Data entry table ----------
+const TPL_COLS=Papa.parse(TEMPLATE.split('\n')[0],{header:false}).data[0];
+let dt={cols:[...TPL_COLS],rows:Array.from({length:10},()=>TPL_COLS.map(()=>''))}, dtDirty=false;
+const dtBlank=()=>dt.cols.map(()=>'');
+function dtRender(focus){
+  const t=$('dtable');
+  const head='<thead><tr><th class="rn">#</th>'+dt.cols.map((c,j)=>`<th><div class="hcell"><input data-r="-1" data-c="${j}" value="${esc(c)}" aria-label="Column ${j+1} name"><button class="xbtn" data-delc="${j}" type="button" title="Delete column" aria-label="Delete column ${esc(c)}">×</button></div></th>`).join('')+'</tr></thead>';
+  const body='<tbody>'+dt.rows.map((r,i)=>`<tr><td class="rn"><button class="xbtn" data-delr="${i}" type="button" title="Delete row" aria-label="Delete row ${i+1}">×</button>${i+1}</td>`+r.map((v,j)=>`<td><input data-r="${i}" data-c="${j}" value="${esc(v)}" aria-label="Row ${i+1}, ${esc(dt.cols[j])}"></td>`).join('')+'</tr>').join('')+'</tbody>';
+  t.innerHTML=head+body;
+  if(focus){ const el=t.querySelector(`input[data-r="${focus[0]}"][data-c="${focus[1]}"]`); if(el){el.focus(); el.select();} }
+  dtStatus();
+}
+function dtFilled(){ return dt.rows.filter(r=>r.some(v=>String(v).trim()!=='')); }
+function dtStatus(msg){ $('dtMsg').textContent=msg||`${dt.rows.length} rows × ${dt.cols.length} columns · ${dtFilled().length} rows with data${dtDirty?' · unsaved changes':''}`; }
+$('dtable').addEventListener('input',e=>{
+  const r=+e.target.dataset.r, c=+e.target.dataset.c; if(isNaN(r)) return;
+  if(r<0) dt.cols[c]=e.target.value; else dt.rows[r][c]=e.target.value;
+  dtDirty=true; dtStatus();
+});
+$('dtable').addEventListener('click',e=>{
+  const b=e.target.closest('.xbtn'); if(!b) return;
+  if(b.dataset.delr!==undefined){ dt.rows.splice(+b.dataset.delr,1); if(!dt.rows.length) dt.rows.push(dtBlank()); }
+  else { const j=+b.dataset.delc; if(dt.cols.length<=1) return; dt.cols.splice(j,1); dt.rows.forEach(r=>r.splice(j,1)); }
+  dtDirty=true; dtRender();
+});
+$('dtable').addEventListener('keydown',e=>{
+  const r=+e.target.dataset.r, c=+e.target.dataset.c; if(isNaN(r)) return;
+  let to=null;
+  if(e.key==='Enter'||e.key==='ArrowDown'){ if(r===dt.rows.length-1){ if(e.key!=='Enter') return; dt.rows.push(dtBlank()); dtRender([r+1,c]); e.preventDefault(); return; } to=[r+1,c]; }
+  else if(e.key==='ArrowUp'&&r>-1) to=[r-1,c];
+  if(to){ e.preventDefault(); const el=$('dtable').querySelector(`input[data-r="${to[0]}"][data-c="${to[1]}"]`); if(el){el.focus();el.select();} }
+});
+$('dtable').addEventListener('paste',e=>{
+  const r0=+e.target.dataset.r, c0=+e.target.dataset.c; if(isNaN(r0)) return;
+  const txt=(e.clipboardData||window.clipboardData).getData('text');
+  if(!/[\t\n]/.test(txt.replace(/\r?\n$/,''))) return; // single value: let the browser paste it
+  e.preventDefault();
+  const grid=Papa.parse(txt.replace(/\r?\n$/,''),{delimiter:'\t'}).data;
+  let rr=r0;
+  grid.forEach((line,k)=>{
+    line.forEach((v,m)=>{
+      const c=c0+m;
+      while(dt.cols.length<=c){ dt.cols.push(`Column ${dt.cols.length+1}`); dt.rows.forEach(x=>x.push('')); }
+      if(rr<0) dt.cols[c]=String(v).trim()||dt.cols[c];
+      else { while(dt.rows.length<=rr) dt.rows.push(dtBlank()); dt.rows[rr][c]=v; }
+    });
+    rr++;
+  });
+  dtDirty=true; dtRender(); dtStatus(`Pasted ${grid.length} row${grid.length>1?'s':''} × ${Math.max(...grid.map(l=>l.length))} columns.`);
+});
+$('dtAddRow').addEventListener('click',()=>{ dt.rows.push(dtBlank()); dtRender([dt.rows.length-1,0]); });
+$('dtAddCol').addEventListener('click',()=>{ dt.cols.push(`Column ${dt.cols.length+1}`); dt.rows.forEach(r=>r.push('')); dtDirty=true; dtRender([-1,dt.cols.length-1]); });
+$('dtClear').addEventListener('click',()=>{
+  if(dtDirty&&!confirm('Clear the table? Unsaved entries will be lost.')) return;
+  dt={cols:[...TPL_COLS],rows:Array.from({length:10},()=>TPL_COLS.map(()=>''))}; dtDirty=false; dtRender();
+});
+$('dtLoad').addEventListener('click',()=>{
+  if(!rows.length){ dtStatus('No data is loaded to edit.'); return; }
+  if(dtDirty&&!confirm('Replace the table with the currently loaded data? Unsaved entries will be lost.')) return;
+  dt={cols:[...fields],rows:rows.map(r=>fields.map(f=>r[f]==null?'':String(r[f])))}; dtDirty=false; dtRender();
+});
+function dtNames(){ const seen={}; return dt.cols.map((c,j)=>{let n=String(c).trim()||`Column ${j+1}`; if(seen[n]) n+=` (${++seen[n]})`; else seen[n]=1; return n;}); }
+$('dtDown').addEventListener('click',()=>{
+  const csv=Papa.unparse({fields:dtNames(),data:dtFilled()});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='entered_data.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  dtDirty=false; dtStatus();
+});
+$('dtApply').addEventListener('click',()=>{
+  const names=dtNames(), filled=dtFilled();
+  if(!filled.length){ dtStatus('The table is empty. Type or paste some data first.'); return; }
+  const data=filled.map(r=>Object.fromEntries(names.map((n,j)=>[n,String(r[j]??'').trim()])));
+  wb=null; $('sheetBox').hidden=true; $('file').value='';
+  loadRows(data,'Entered data',names);
+  if(!lastFC.features.length){ dtStatus('Loaded, but no rows have valid latitude and longitude in decimal degrees. Check the coordinate columns.'); return; }
+  showTab('map');
+});
+window.addEventListener('beforeunload',e=>{ if(dtDirty){ e.preventDefault(); e.returnValue=''; } });
+
+function setModeUI(){
+  const scatter=document.querySelector('input[name=mode]:checked').value==='scatter';
+  $('bubbleSz').hidden=scatter; $('scatSz').hidden=!scatter;
+  $('modeHint').textContent=scatter?'Fixed-size markers: only color carries data.':'Bubble size and color both carry data.';
+}
+document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',()=>{setModeUI();render(false);}));
+['latSel','lonSel'].forEach(id=>$(id).addEventListener('change',()=>render(true)));
+['sizeSel','colorSel','scaleSel','cmodeSel','showLeg'].forEach(id=>$(id).addEventListener('change',()=>render(false)));
+['pColorSel','pCmodeSel','pScaleSel'].forEach(id=>$(id).addEventListener('change',()=>drawPlots()));
+['showLbl','lblSel','surfSel','surfRes','surfClip'].forEach(id=>$(id).addEventListener('change',()=>render(false)));
+$('surfPow').addEventListener('input',e=>{$('surfPowv').textContent=(+e.target.value).toFixed(1);});
+$('surfPow').addEventListener('change',()=>render(false));
+$('showWells').addEventListener('change',()=>{ $('wellCfg').hidden=$('wellStyle').hidden=!$('showWells').checked; render(false); }); // recompute on release (heavier)
+$('surfOp').addEventListener('input',e=>{$('surfOpv').textContent=(+e.target.value).toFixed(2); if(map.getLayer('surf')) map.setPaintProperty('surf','raster-opacity',+e.target.value);});
+$('pSizeSel').addEventListener('change',()=>{$('pSizeOpts').hidden=$('pSizeSel').value===NONE;drawPlots();});
+$('pMaxR').addEventListener('input',e=>{$('pMaxRv').textContent=e.target.value;drawPlots();});
+$('pOp').addEventListener('input',e=>{$('pOpv').textContent=(+e.target.value).toFixed(2);drawPlots();});
+$('maxR').addEventListener('input',e=>{$('maxRv').textContent=e.target.value;render(false);});
+$('mkR').addEventListener('input',e=>{$('mkRv').textContent=e.target.value;render(false);});
+$('op').addEventListener('input',e=>{$('opv').textContent=(+e.target.value).toFixed(2);render(false);});
+$('titleIn').addEventListener('input',()=>render(false));
+$('fitBtn').addEventListener('click',fitData);
+$('filtSel').addEventListener('change',()=>{buildFilter();render(false);});
+$('filtVals').addEventListener('change',e=>{
+  const k=e.target.dataset.k; if(k===undefined) return;
+  e.target.checked?filtAllowed.add(k):filtAllowed.delete(k); render(false);
+});
+const setAll=on=>{ if(!filtAllowed) return; $('filtVals').querySelectorAll('input').forEach(c=>{c.checked=on;on?filtAllowed.add(c.dataset.k):filtAllowed.delete(c.dataset.k);}); render(false); };
+$('filtAll').addEventListener('click',()=>setAll(true));
+$('filtNone').addEventListener('click',()=>setAll(false));
+
+const PAPA={header:true,dynamicTyping:false,skipEmptyLines:'greedy',transformHeader:h=>h.replace(/^\uFEFF/,'').trim()};
+function loadTemplate(){
+  const res=Papa.parse(TEMPLATE,PAPA);
+  loadRows(res.data,'Template data',res.meta.fields);
+}
+function clearData(){
+  rows=[]; fields=[]; types={}; label=''; filtAllowed=null; wb=null;
+  ['latSel','lonSel','sizeSel','colorSel','filtSel','sheetSel','pColorSel','pSizeSel','lblSel','surfSel'].forEach(id=>$(id).innerHTML='');
+  $('filtBox').hidden=true; $('filtVals').innerHTML=''; $('sheetBox').hidden=true; $('file').value='';
+  lastFC={type:'FeatureCollection',features:[]}; lastBounds=null;
+  if(styleReady) ensureData();
+  document.querySelectorAll('.maplibregl-popup').forEach(p=>p.remove());
+  $('legend').hidden=true; $('legend').innerHTML='';
+  plots.forEach((_,i)=>$('plot'+i)&&Plotly.purge('plot'+i)); plots=[]; $('pgrid').innerHTML=''; $('plotLegend').innerHTML=''; $('plotTitle').textContent='';
+  labelMarkers.forEach(m=>m.remove()); labelMarkers=[];
+  surf=null; surfKey=''; removeSurface(); $('readout').hidden=true; $('surfMsg').textContent='';
+  $('status').textContent='No data loaded. Choose a CSV or Excel file above.';
+}
+$('clearBtn').addEventListener('click',clearData);
+$('tplBtn').addEventListener('click',()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([TEMPLATE],{type:'text/csv'}));
+  a.download='data_template.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+});
+// ---------- Excel ----------
+let wb=null, wbName='';
+const pad=n=>String(n).padStart(2,'0');
+function sheetRows(name){
+  const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:'',blankrows:false});
+  const hdrIdx=aoa.findIndex(r=>r.some(c=>!empty(c)));
+  if(hdrIdx<0) return {data:[],flds:[]};
+  const seen={};
+  const flds=aoa[hdrIdx].map((h,i)=>{let n=String(h).trim()||`Column ${i+1}`; if(seen[n]) n+=` (${++seen[n]})`; else seen[n]=1; return n;});
+  const cell=v=>{
+    if(v instanceof Date) return `${v.getFullYear()}-${pad(v.getMonth()+1)}-${pad(v.getDate())}`; // Excel dates -> YYYY-MM-DD
+    return v===null||v===undefined?'':String(v);
+  };
+  const data=aoa.slice(hdrIdx+1).filter(r=>r.some(c=>!empty(c))).map(r=>Object.fromEntries(flds.map((f,i)=>[f,cell(r[i])])));
+  return {data,flds};
+}
+function loadSheet(name){
+  const {data,flds}=sheetRows(name);
+  if(!data.length){clearViews(`${wbName} (${name}): no data rows found. Check that the first row holds column names.`);return;}
+  loadRows(data,wb.SheetNames.length>1?`${wbName} [${name}]`:wbName,flds);
+}
+function clearViews(msg){ const keepWb=wb, keepName=wbName, sheets=$('sheetSel').innerHTML, v=$('sheetSel').value, show=!$('sheetBox').hidden;
+  clearData(); wb=keepWb; wbName=keepName; $('sheetSel').innerHTML=sheets; $('sheetSel').value=v; $('sheetBox').hidden=!show; $('status').textContent=msg; }
+$('sheetSel').addEventListener('change',()=>loadSheet($('sheetSel').value));
+
+$('file').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  wb=null; $('sheetBox').hidden=true;
+  if(/\.(xlsx|xlsm|xls)$/i.test(f.name)){
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        wb=XLSX.read(new Uint8Array(rd.result),{type:'array',cellDates:true});
+        wbName=f.name;
+        const first=wb.SheetNames.find(n=>sheetRows(n).data.length)||wb.SheetNames[0]; // skip empty/notes sheets
+        fillSelect($('sheetSel'),wb.SheetNames,first);
+        $('sheetBox').hidden=wb.SheetNames.length<2;
+        loadSheet(first);
+      }catch(err){$('status').textContent='Could not read Excel file: '+err.message;}
+    };
+    rd.onerror=()=>{$('status').textContent='Could not read file.';};
+    rd.readAsArrayBuffer(f);
+    return;
+  }
+  Papa.parse(f,{...PAPA,complete:res=>{
+    if(!res.data.length){$('status').textContent='No rows found. Check that the first row holds column names.';return;}
+    loadRows(res.data,f.name,res.meta.fields);
+  },error:err=>{$('status').textContent='Could not read file: '+err.message;}});
+});
+
+setModeUI();
+loadTemplate();
+</script>
+</body>
+</html>
